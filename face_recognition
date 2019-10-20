@@ -1,0 +1,46 @@
+
+import cv2
+
+def detectFace():
+    # 创建人脸检测的对象,加载人脸检测的配置文件
+    face_cascade = cv2.CascadeClassifier(r'D:\PyCharm\untitled\untitled\untitled\venv\Lib\site-packages\cv2\data\haarcascade_frontalface_alt.xml')
+    # face_cascade = cv2.CascadeClassifier('..\data\haarcascades\haarcascade_frontalface_alt.xml')
+    # face_cascade.load('../data/haarcascades/haarcascade_frontalface_alt.xml')
+    # 连接摄像头的对象 0表示摄像头的编号
+    cap = cv2.VideoCapture(0)
+    scaling_factor = 1.25
+
+    #如果没打开摄像头就报错
+    if not cap.isOpened:
+        raise IOError('Cannot open webcam!')
+
+    while True:
+        # 读取当前帧
+        ret, frame = cap.read()#返回是否读取成功和读取到的帧
+        if not ret:
+            break
+        frame = cv2.resize(frame, None,
+                           fx=scaling_factor,#水平轴上的比例因子
+                           fy=scaling_factor,#垂直轴上的比例因子
+                           interpolation=cv2.INTER_LINEAR)#双线性插值法
+        # 转为灰度图像
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        #检测人脸 返回列表
+        face_rects = face_cascade.detectMultiScale(gray)
+
+        for (x, y, w, h) in face_rects:
+            # img表示图片，(x, y)表示矩阵左上角的位置，(x + w, y + h)表示矩阵右下角的位置, (0, 0, 255)表示颜色，2表示线条
+            cv2.rectangle(frame, (x, y), (x + w, h + y), (0, 255, 0), 3)
+
+        cv2.imshow('detecting face', frame)
+
+        if cv2.waitKey(1) == 27:
+            break
+    cap.release()
+    cv2.destroyAllWindows()
+
+
+if __name__ == '__main__':
+    detectFace()
+
+
