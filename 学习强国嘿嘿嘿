@@ -1,0 +1,815 @@
+-(function() {
++(async function() {
+     'use strict';
+     const dati="开始答题"
+ 
++    var needReload;
+     var timers = [];
++    var debug = true; // 调试开关，有问题打开这个开关，在www.xuexi.cn页面按12打开控制台，把log贴上来反馈给我。
+ 
+     var msg = "";
++    var datev = new Date();
++    const supa = supabase.createClient("https://vsxqsnogzhrykowqdloi.supabase.co", 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlhdCI6MTYxMTI3NTU1NywiZXhwIjoxOTI2ODUxNTU3fQ.DWxw-rBJSqM6oShe3WI55j9nuJ5Zzo4x3ISzROA90aU')
++
++    //var articles = await getArticles();
++    //console.log(articles)
++
++    var date = datev .getFullYear() + "/" + datev .getMonth() + "/" + datev .getDate();
++    var examData = GMgetValue(date, {weeklyExamDone:false, zhuanxiangExamDone:false})
+     var settings = GMgetValue("Settings");
+-    console.log(settings);
++    if (debug) {
++        console.log("examData-----------------", examData);
++        console.log(settings);
++    }
++
++
+     if (!settings) {
+         msg = "请通过左边按钮设定自动学习项目，默认为全部自动学习！！";
+         settings={
+                     article: { value: true, name: "文章学习" },
+@@ -52,52 +69,99 @@
+     } else {
+         msg = "如需修改自动学习项目，请通过左边按钮修改！！";
+     }
+ 
+-    console.log(settings);
++    if (debug) {
++        console.log(settings);
++    }
+ 
+     async function doStudy() {
++        console.log("doStudy() start")
+ 
+-        if (settings.article.value) {
+-            await doArticleStudy();
++        var scores = await getScores();
++        if (debug) {
++            console.log(scores);
++
++            console.log(checkAriticle(scores))
++            console.log(checkVideo(scores))
++            console.log(checkDaily(scores))
++            console.log(checkWeekly(scores))
++            console.log(checkZhuanxiang(scores))
+         }
+ 
+-        if (settings.video.value) {
++        if (!(checkAriticle(scores) ||
++              checkVideo(scores) ||
++              checkDaily(scores) ||
++              checkWeekly(scores) ||
++              checkZhuanxiang(scores))) {
++            console.log("return");
++            return;
++        }
++        if (checkAriticle(scores)) {
++             await doArticleStudy();
++        }
++
++        if (checkVideo(scores)) {
+             await doVideoStudy();
+         }
+ 
+         if (settings.daily.value || settings.weekly.value || settings.zhuanxiang.value) {
+-            var scores = await getScores();
+-            if (scores.daily.dayScore < scores.daily.dayMaxScore && settings.daily.value) {
++            if (checkDaily(scores)) {
+                 await openDailyExam();
+-            } else if (scores.weekly.dayScore === 0 && settings.weekly.value) {
++            } else if (checkWeekly(scores)) {
+                 await openWeeklyExam();
+-            } else if(scores.zhuanxiang.dayScore === 0 && settings.zhuanxiang.value) {
++            } else if(checkZhuanxiang(scores)) {
+                 await openZhuanxiangExam();
+             }
+         }
+ 
++        console.log("doStudy() end")
++
+     }
+ 
++    function checkAriticle(scores) {
++        return (settings.article.value && scores.article.dayScore < scores.article.dayMaxScore);
++    }
++
++    function checkVideo(scores) {
++        return (settings.video.value && (scores.video_num.dayScore < scores.video_num.dayMaxScore || scores.video_time.dayScore < scores.video_time.dayMaxScore));
++    }
++
++    function checkDaily(scores) {
++        return (scores.daily.dayScore < scores.daily.dayMaxScore && settings.daily.value);
++    }
++
++    function checkWeekly(scores) {
++        return (scores.weekly.dayScore === 0 && settings.weekly.value && !examData.weeklyExamDone);
++    }
++
++    function checkZhuanxiang(scores) {
++        return (scores.zhuanxiang.dayScore === 0 && settings.zhuanxiang.value && !examData.zhuanxiangExamDone);
++    }
++
+     async function openDailyExam() {
+         console.log("openDailyExam() start")
+         var scores = await getScores();
+ 
+         if (scores.daily.dayScore < scores.daily.dayMaxScore) {
+             var win = window.open("https://pc.xuexi.cn/points/exam-practice.html");
+             var timer = setInterval(async function() {
+                 if(win.closed) {
+-                    var scores = await getScores();
++                    /*var scores = await getScores();
+                     if (scores.daily.dayScore < scores.daily.dayMaxScore && settings.daily.value) {
+                         clearInterval(timer);
+                         openDailyExam();
+-                    } else {
+-                        if (scores.weekly.dayScore === 0 && settings.weekly.value){
++                    } else {*/
++                        if (checkWeekly(scores)){
+                             openWeeklyExam();
++                        } else if(checkZhuanxiang(scores)) {
++                            openZhuanxiangExam();
++                        } else {
++                            location.reload();
+                         }
+                         clearInterval(timer);
+                         console.log('DailyExam closed');
+-                    }
++                    //}
+                 }
+             },10000);
+         }
+         console.log("openDailyExam() end")
+@@ -110,10 +174,12 @@
+         if (scores.weekly.dayScore === 0) {
+             var win = window.open("https://pc.xuexi.cn/points/exam-weekly-list.html");
+             var timer = setInterval(function() {
+                 if(win.closed) {
+-                    if(scores.zhuanxiang.dayScore === 0 && settings.zhuanxiang.value) {
++                    if(checkZhuanxiang(scores)) {
+                         openZhuanxiangExam();
++                    } else {
++                        location.reload();
+                     }
+                     clearInterval(timer);
+                     console.log('WeeklyExam closed');
+                 }
+@@ -127,10 +193,17 @@
+         console.log("openZhuanxiangExam() start")
+         var scores = await getScores();
+ 
+         if (scores.zhuanxiang.dayScore === 0) {
+-            window.open("https://pc.xuexi.cn/points/exam-paper-list.html");
++            var win = window.open("https://pc.xuexi.cn/points/exam-paper-list.html");
+ 
++            var timer = setInterval(function() {
++                if(win.closed) {
++                    location.reload();
++                    clearInterval(timer);
++                    console.log('ZhuanxiangExam closed');
++                }
++            },10000);
+         }
+         console.log("openZhuanxiangExam() end")
+     }
+ 
+@@ -161,8 +234,10 @@
+                 console.log("===================================");
+                 await delay();
+                 var end = await doExam();
+                 if (end) {
++                    examData.weeklyExamDone = true;
++                    GMsetValue(date, examData);
+                     window.close();
+                     break;
+                 }
+                 //scores = await getScores();
+@@ -180,8 +255,10 @@
+                 console.log("===================================");
+                 await delay();
+                 var end = await doExam();
+                 if (end) {
++                    examData.zhuanxiangExamDone = true;
++                    GMsetValue(date, examData);
+                     window.close();
+                     break;
+                 }
+                 //scores = await getScores();
+@@ -199,9 +276,12 @@
+             exams = exams.filter(exams => {
+                 return exams.innerText === dati
+             })
+             if (exams.length == 0) {
+-                openZhuanxiangExam();
++                examData.weeklyExamDone = true;
++                GMsetValue(date, examData);
++                //openZhuanxiangExam();
++                window.close();
+             } else {
+                 exams[exams.length-1].click();
+             }
+         });
+@@ -210,21 +290,75 @@
+             var exams = Array.prototype.slice.call(buttons);
+             exams = exams.filter(exams => {
+                 return exams.innerText === dati
+             })
+-            exams[exams.length-1].click();
++            if (exams.length == 0) {
++                examData.zhuanxiangExamDone = true;
++                GMsetValue(date, examData);
++                window.close();
++            } else {
++                exams[exams.length-1].click();
++            }
++
+         });
+     } else if (window.location.href.startsWith("https://pc.xuexi.cn/points/exam-weekly-detail.html")) {
+         doWeeklyExam();
+     } else if (window.location.href.startsWith("https://pc.xuexi.cn/points/exam-paper-detail.html")) {
+         doZhuanXiangExam();
++    } else if (window.location.href.startsWith("https://pc.xuexi.cn/points/my-points.html")) {
++        $(document).ready(async function() {
++
++            await parseScoreDocument();
++            window.close();
++        })
++
++        /*setInterval(() => {
++            needReload = GMgetValue("needReload");
++            if (needReload == "1") {
++                location.reload();
++            }
++        }, 60000);*/
++
+     } else {
+-        $.when(getDayScore()).then(data => {
+-            if (data.ok === false) {
++        $(document).ready(async function() {
++            var retryNum = 20;
++            var login;
++            var logined;
++            while (retryNum >= 0) { // 不知道什么原因，有时候就是取不到，所以多循环几次取
++                login = document.querySelector("a.icon.login-icon");
++                logined = document.querySelector("span.logged-text");
++                if (debug) {
++                console.log(login);
++                }
++                if (login != null && login != undefined) {
++                    break;
++                }
++
++                if (logined != null && logined != undefined) {
++                    break;
++                }
++
++                await sleep(2000);
++                retryNum--;
++                continue;
++            }
++
++
++            if (login != null && login != undefined) {
+                 alert("请先登录学习强国，然后才能自动学习！！\n" + msg);
+-            } else {
+-                doStudy();
+             }
++
++            if (logined != null && logined != undefined) {
++                var win = window.open("https://pc.xuexi.cn/points/my-points.html");
++                var timer = setInterval(function() {
++                    if(win.closed) {
++                        doStudy();
++                        clearInterval(timer);
++                        console.log('score page closed');
++                    }
++                },10000);
++
++            }
+         })
+     }
+ 
+     async function getExams() {
+@@ -244,9 +378,11 @@
+         console.log("doExam() start")
+         var end = false;
+         var nextAll=document.querySelectorAll(".ant-btn");
+ 
++        if (debug) {
+         console.log(nextAll);
++        }
+         var next=nextAll[0];
+ 
+         if(nextAll.length==2) {
+             next=nextAll[1];
+@@ -265,16 +401,20 @@
+         }
+ 
+         //所有提示
+         var allTips=document.querySelectorAll("font[color=red]");
++        if (debug) {
+         console.log(allTips);
++        }
+         await delay();
+ 
+         //选项按钮
+         var buttons=document.querySelectorAll(".q-answer");
+ 
+         var textboxs=document.querySelectorAll("input[type=text]");
++        if (debug) {
+         console.log(textboxs);
++        }
+         //问题类型
+         try {
+             var qType= document.querySelector(".q-header").textContent;
+             qType=qType.substr(0,3)
+@@ -352,9 +492,11 @@
+                 results = [];
+                 for(let i=0;i< allTips.length;i++) {
+                     let tip=allTips[i];
+                     let tipText=tip.textContent;
++                    if (debug) {
+                     console.log(tipText);
++                    }
+                     if(tipText.length>0) {
+                         for(let js=0;js<buttons.length;js++) {
+                             let cButton=buttons[js];
+                             let cButtonText=cButton.textContent;
+@@ -363,19 +505,23 @@
+                     }
+ 
+                     let max = 0;
+                     let index = 0;
++                    if (debug) {
+                     console.log(results);
++                    }
+                     results.forEach((item, i) => {
+                         if (item > max) {
+                             max = item;
+                             index = i;
+                         }
+                     });
+ 
++                    if (debug) {
+                     console.log("max = " + max)
+                     console.log("index = " + index)
+                     console.log($(buttons[index]).hasClass("chosen"));
++                    }
+                     if (!$(buttons[index]).hasClass("chosen")) {
+                         buttons[index].click();
+                     }
+ 
+@@ -395,17 +541,21 @@
+                     for(let i=0;i< allTips.length;i++) {
+                         tipText += allTips[i].textContent;
+                     }
+ 
++                    if (debug) {
+                     console.log(tipText)
++                    }
+                     let clicked = false;
+                     if(tipText.length>0) {
+                         //循环对比后点击
+                         for(let js=0;js<buttons.length;js++) {
+                             results[js] = 0;
+                             let cButton=buttons[js];
+                             let cButtonText=cButton.textContent;
++                            if (debug) {
+                             console.log(cButtonText);
++                            }
+                             //通过判断是否相互包含，来确认是不是此选项
+                             if(cButtonText.indexOf(tipText)>-1||tipText.indexOf(cButtonText)>-1) {
+                                 clicked = true;
+                                 cButton.click();
+@@ -417,20 +567,26 @@
+ 
+                         if (!clicked) {
+                             let max = 0;
+                             let index = 0;
++                            if (debug) {
+                             console.log(results);
++                            }
+                             results.forEach((item, i) => {
+                                 if (item > max) {
+                                     max = item;
+                                     index = i;
+                                 }
+                             });
+ 
++                            if (debug) {
+                             console.log("max = " + max)
+                             console.log("index = " + index)
++                            }
+                             buttons[index].click();
+                         }
++                    } else {
++                        buttons[0].click();
+                     }
+                 }
+                 break;
+             default:
+@@ -444,9 +600,11 @@
+         }
+ 
+         nextAll=document.querySelectorAll(".ant-btn");
+ 
++        if (debug) {
+         console.log(nextAll);
++        }
+ 
+         if(nextAll.length==2) {
+             next=nextAll[1];
+         }
+@@ -456,9 +614,11 @@
+             next.click();
+         } else {
+             end = true;
+         }
++        if (debug) {
+         console.log("end = " + end)
++        }
+         console.log("doExam() end")
+         return end;
+ 
+     }
+@@ -469,49 +629,57 @@
+         console.log("doVideoStudy() start")
+         var videos = await getVideos();
+         // console.log(videos);
+         var i = 0;
+-        var scores
+         var closed = true;
+-        while (true) {
++        var scores = await getScores();
++        if (debug) {
++        console.log(scores);
++        }
++        var num = Math.max((scores.video_num.dayMaxScore - scores.video_num.dayScore),(scores.video_time.dayMaxScore - scores.video_time.dayScore)) + 1
++        while (num >= 0) {
+             closed = false;
+-            scores = await getScores();
++            //scores = await getScores();
+             //console.log(scores.video_num.dayScore);
+             //console.log(scores.video_num.dayMaxScore);
+             //console.log(scores.video_time.dayScore);
+             //console.log(scores.video_time.dayMaxScore);
+             var k = 0;
+-            if (scores.video_num.dayScore < scores.video_num.dayMaxScore || scores.video_time.dayScore < scores.video_time.dayMaxScore) {
++            //if (scores.video_num.dayScore < scores.video_num.dayMaxScore || scores.video_time.dayScore < scores.video_time.dayMaxScore) {
+                 var readarticle_time = 40 + (Math.ceil(Math.random()*10) + 5);
++            if (debug) {
+                 console.log(readarticle_time);
++            }
+                 var win = window.open(videos[i].url, videos[i].title);
+                 //for (var j = 0; j < 2; j++) {
+                 /*if (Math.random() > 0.3) {
+ 
+                     }*/
+                 await delay();
+                 var height = win.document.body.clientHeight/2;
+                 win.window.scrollTo(0, height);
+-                console.log(new Date());
++
+                 await sleep(readarticle_time * 1000);
+-                console.log(new Date());
+-                //console.log(j);
+-                //}
+ 
+                 win.close();
+ 
+-                i++
+-            } else {
+-                break;
+-            }
++                i++;
++                num--;
++            //} else {
++              //  break;
++            //}
+         }
+         console.log("doVideoStudy() end")
+ 
+     }
+ 
+-    async function getVideos() {
++
++    /*async function getVideos() {
+         var videos = []
+         await $.when(getVideos1(), getVideos2(), getVideos3()).done(function(videos1, videos2, videos3) {
++            console.log(videos1)
++            console.log(videos2)
++            console.log(videos3)
+             videos = videos.concat(videos1[0].map(video => {
+                 return {itemId:video.itemId, title:video.title, url:video.url}
+             }))
+             videos = videos.concat(videos2[0].map(video => {
+@@ -526,60 +694,64 @@
+             })
+ 
+         })
+         return videos;
+-    }
++    }*/
+ 
+-    function getVideos1() {
+-        return $.ajax({
+-            type: "GET",
+-            url: "https://www.xuexi.cn/lgdata/3m1erqf28h0r.json?_st=26814661",
+-            dataType: 'json',
+-            xhrFields: {
+-                withCredentials: true //允许跨域带Cookie
+-            }
+-        });
+-    }
++    async function getVideos() {
++        console.log("getVideos() start")
++        let {data, error} = await supa
++        .from('xuexi-videos-test')
++        .select('id')
+ 
+-    function getVideos2() {
+-        return $.ajax({
+-            type: "GET",
+-            url: "https://www.xuexi.cn/lgdata/41gt3rsjd6l8.json?_st=26814661",
+-            dataType: 'json',
+-            xhrFields: {
+-                withCredentials: true //允许跨域带Cookie
+-            }
+-        });
+-    }
++        let ids = data.sort(function(){
++            return Math.random() - 0.5
++        }).slice(0, 20).map(id => {
++            return id.id
++        })
+ 
+-    function getVideos3() {
+-        return $.ajax({
+-            type: "GET",
+-            url: "https://www.xuexi.cn/lgdata/48cdilh72vp4.json?_st=26814661",
+-            dataType: 'json',
+-            xhrFields: {
+-                withCredentials: true //允许跨域带Cookie
+-            }
+-        });
++        let response = await supa
++        .from('xuexi-videos-test')
++        .select('video')
++        .in('id', ids)
++
++        let result = response.data.map(video => {
++            return video.video
++        })
++
++        if (debug) {
++        console.log(result)
++        }
++        console.log("getVideos() end")
++
++        return result
++
+     }
+ 
++
+     async function doArticleStudy() {
+         console.log("doArticleStudy() start")
+         var articles = await getArticles();
+-        articles.sort(function(){
++        /*articles.sort(function(){
+             return Math.random() - 0.5
+-        })
++        })*/
+         var i = 0;
+-        var scores
+-        while (true) {
+-            scores = await getScores();
++        var scores = await getScores();
++        if (debug) {
++        console.log(scores);
++        }
++        var num = Math.ceil((scores.article.dayMaxScore - scores.article.dayScore)/2) + 1
++        while (num >= 0) {
++
+             //console.log(scores.article_num.dayScore);
+             //console.log(scores.article_num.dayMaxScore);
+             //console.log(scores.article_time.dayScore);
+             //console.log(scores.article_time.dayMaxScore);
+-            if (scores.article_num.dayScore < scores.article_num.dayMaxScore || scores.article_time.dayScore < scores.article_time.dayMaxScore) {
++            //if (scores.article.dayScore < scores.article.dayMaxScore) {
+                 var readarticle_time = 50 + (Math.ceil(Math.random()*10) + 5);
++            if (debug) {
+                 console.log(readarticle_time);
++            }
+                 var win = window.open(articles[i].url, articles[i].title);
+                 //for (var j = 0; j < 2; j++) {
+                 //if (Math.random() > 0.3) {
+                 await delay()
+@@ -590,12 +762,13 @@
+                 //console.log(j);
+                 //}
+ 
+                 win.close();
+-                i++
+-            } else {
+-                break;
+-            }
++                num--;
++            i++;
++            //} else {
++              //  break;
++            //}
+         }
+         console.log("doArticleStudy() end")
+     }
+ 
+@@ -609,82 +782,128 @@
+             //console.log(timers)
+             });
+     }
+ 
+-    function getArticles() {
+-        return $.ajax({
+-            type: "GET",
+-            url: "https://www.xuexi.cn/lgdata/35il6fpn0ohq.json?_st=26814368",
+-            dataType: 'json',
+-            xhrFields: {
+-                withCredentials: true //允许跨域带Cookie
+-            }
+-        });
++    async function getArticles() {
++        console.log("getArticles() start")
++        let {data, error} = await supa
++        .from('xuexi-articles-test')
++        .select('id')
++
++        let ids = data.sort(function(){
++            return Math.random() - 0.5
++        }).slice(0, 20).map(id => {
++            return id.id
++        })
++
++        let response = await supa
++        .from('xuexi-articles-test')
++        .select('article')
++        .in('id', ids)
++
++        let result = response.data.map(article => {
++            return article.article
++        })
++
++        if (debug) {
++        console.log(result)
++        }
++        console.log("getArticles() end")
++
++        return result
+     }
+ 
+ 
+     async function getScores() {
+-        var scores = {}
+-        await $.when(getDayScore(), getTotalScore()).done(function(dayScoreResult, totalScoreResult) {
+-            //console.log(dayScoreResult);
++        console.log("getScores() start")
++        var scores = GMgetValue("scores", {})
++         if (debug) {
++        console.log(scores);
++         }
++        console.log("getScores() end")
++        return scores;
++    }
+ 
+-            var dayScoreDtos = dayScoreResult[0].data.dayScoreDtos;
+-            dayScoreDtos.forEach(function(scoreDto) {
+-                if (scoreDto.ruleId === 1) {
+-                    scores["article_num"]  = {dayScore:scoreDto.currentScore, dayMaxScore:scoreDto.dayMaxScore} // 0阅读文章
+-                }
+-                if (scoreDto.ruleId === 2) {
+-                    scores["video_num"]  = {dayScore:scoreDto.currentScore, dayMaxScore:scoreDto.dayMaxScore} // 1视听学习
+-                }
+-                if (scoreDto.ruleId === 9) {
+-                    scores["login"]  = {dayScore:scoreDto.currentScore, dayMaxScore:scoreDto.dayMaxScore} // 登陆
+-                }
+-                if (scoreDto.ruleId === 1002) {
+-                    scores["article_time"]  = {dayScore:scoreDto.currentScore, dayMaxScore:scoreDto.dayMaxScore} // 文章时长
+-                }
+-                if (scoreDto.ruleId === 1003) {
+-                    scores["video_time"]  = {dayScore:scoreDto.currentScore, dayMaxScore:scoreDto.dayMaxScore} // 视听学习时长
+-                }
+-                if (scoreDto.ruleId === 6) {
+-                    scores["daily"]  = {dayScore:scoreDto.currentScore, dayMaxScore:scoreDto.dayMaxScore} // 每日答题
+-                }
+-                if (scoreDto.ruleId === 5) {
+-                    scores["weekly"]  = {dayScore:scoreDto.currentScore, dayMaxScore:scoreDto.dayMaxScore} // 每周答题
+-                }
+-                if (scoreDto.ruleId === 4) {
+-                    scores["zhuanxiang"]  = {dayScore:scoreDto.currentScore, dayMaxScore:scoreDto.dayMaxScore} // 专项答题
+-                }
+ 
+-            });
+-            scores.totalScore = totalScoreResult[0].data.score;
+-            //console.log(scores);
++    /*function getTotalScore() {
++        var scores = GMgetValue("scores", {})
++        return scores;
++    }*/
+ 
+-        })
++
++    function getDayScore() {
++        console.log("getDayScore() start")
++        var scores = GMgetValue("scores", {})
++        console.log("getDayScore() end")
+         return scores;
+     }
+ 
+-
+-    function getTotalScore() {
+-        return $.ajax({
+-            type: "GET",
+-            url: "https://pc-api.xuexi.cn/open/api/score/get",
+-            dataType: 'json',
+-            xhrFields: {
+-                withCredentials: true //允许跨域带Cookie
++    async function  parseScoreDocument() {
++console.log("parseScoreDocument() start")
++        var scores = {};
++        scores.totalScore = $("span.my-points-points.my-points-red").text();
++        var cards = $("div.my-points-card-text");
++        var length = cards.length;
++        var retryNum = 20
++        while (retryNum>0 && length == 0) {
++            cards = $("div.my-points-card-text");
++            length = cards.length;
++            if (length > 0) {
++                break;
+             }
+-        });
+-    }
++            if (debug) {
++            console.log(length)
++            }
++            await sleep(5000)
++            retryNum--;
++        }
+ 
++        /*for (var i = 0; i < length; i++) {
++            console.log($(cards[i]).text());
++        }*/
++        var loginScoreText = $(cards[0]).text();
++        var dayScore_login = parseInt(loginScoreText.split("/")[0].substring(0,1));
++        var dayMaxScore_login = parseInt(loginScoreText.split("/")[1].substring(0,1));
+ 
+-    function getDayScore() {
+-        return $.ajax({
+-            type: "GET",
+-            url: "https://pc-api.xuexi.cn/open/api/score/today/queryrate",
+-            dataType: 'json',
+-            xhrFields: {
+-                withCredentials: true //允许跨域带Cookie
+-            }
+-        });
++        var articleScoreText = $(cards[1]).text();
++        var dayScore_article = parseInt(articleScoreText.split("/")[0].substring(0,articleScoreText.split("/")[0].indexOf("分")));
++        var dayMaxScore_article = parseInt(articleScoreText.split("/")[1].substring(0,articleScoreText.split("/")[1].indexOf("分")));
++
++        var videoNumScoreText = $(cards[2]).text();
++        var dayScore_videoNum = parseInt(videoNumScoreText.split("/")[0].substring(0,1));
++        var dayMaxScore_videoNum = parseInt(videoNumScoreText.split("/")[1].substring(0,1));
++
++        var videoTimeScoreText = $(cards[3]).text();
++        var dayScore_videoTime = parseInt(videoTimeScoreText.split("/")[0].substring(0,1));
++        var dayMaxScore_videoTime = parseInt(videoTimeScoreText.split("/")[1].substring(0,1));
++
++        var dailyScoreText = $(cards[4]).text();
++        var dayScore_daily = parseInt(dailyScoreText.split("/")[0].substring(0,1));
++        var dayMaxScore_daily = parseInt(dailyScoreText.split("/")[1].substring(0,1));
++
++        var weeklyScoreText = $(cards[5]).text();
++        var dayScore_weekly = parseInt(weeklyScoreText.split("/")[0].substring(0,1));
++        var dayMaxScore_weekly = parseInt(weeklyScoreText.split("/")[1].substring(0,1));
++
++        var zhuanxiangScoreText = $(cards[6]).text();
++        var dayScore_zhuanxiang = parseInt(zhuanxiangScoreText.split("/")[0].substring(0,zhuanxiangScoreText.split("/")[0].indexOf("分")));
++        var dayMaxScore_zhuanxiang = parseInt(zhuanxiangScoreText.split("/")[1].substring(0,zhuanxiangScoreText.split("/")[1].indexOf("分")));
++
++
++        scores.login  = {dayScore:dayScore_login, dayMaxScore:dayMaxScore_login} // 登陆
++        scores.article  = {dayScore:dayScore_article, dayMaxScore:dayMaxScore_article}
++        scores.video_num  = {dayScore:dayScore_videoNum, dayMaxScore:dayMaxScore_videoNum}
++
++        scores.video_time  = {dayScore:dayScore_videoTime, dayMaxScore:dayMaxScore_videoTime} // 视听学习时长
++        scores.daily  = {dayScore:dayScore_daily, dayMaxScore:dayMaxScore_daily} // 每日答题
++        scores.weekly  = {dayScore:dayScore_weekly, dayMaxScore:dayMaxScore_weekly} // 每周答题
++        scores.zhuanxiang  = {dayScore:dayScore_zhuanxiang, dayMaxScore:dayMaxScore_zhuanxiang} // 专项答题
++        GMsetValue("scores", scores);
++                if (debug) {
++        console.log(scores)
++        }
++        console.log("parseScoreDocument() end")
++
+     }
+ 
+     function xiangshidu(str1,str2) {
+         var len1 = str1.length;
+     }
