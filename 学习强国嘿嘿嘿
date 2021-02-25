@@ -178,7 +178,7 @@
                  await delay();
                  var end = await doExam();
                  if (end) {
-+                    examData.weeklyExamDone = true;
++                    examData.weeklyExamDone = true; 
 +                    GMsetValue(date, examData);
                      window.close();
                      break;
