@@ -1,0 +1,48 @@
+
+# chrome.exe --remote-debugging-port=9222 --user-data-dir="C:\selenum\AutomationProfile"
+
+import time
+
+from selenium import webdriver
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.chrome.options import Options
+
+# driver.execute_script("window.scrollTo(0, document.body.scrollHeight)");
+# driver.execute_script("window.scrollBy(0, 700)");
+# js="var q=document.documentElement.scrollTop=10000"
+
+# time.sleep(3)
+# ActionChains(driver).move_by_offset(200, 520).context_click().perform()
+# ActionChains(driver).move_by_offset(200, 600).context_click().perform()
+time.sleep(1)
+options = Options()
+options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
+
+chrome_driver = "C:\Program Files (x86)\Google\Chrome\Application\chromedriver.exe"
+driver = webdriver.Chrome(chrome_driver, chrome_options=options)
+
+
+action = ActionChains(driver)
+print(driver.title)
+i = 0
+while True:
+
+    driver.get('https://course.sflep.com/student/StudyCourse.aspx?cid=34&classid=179865&sco=ITEM-eb8e56a4-352b-44f8-9a38-302535202c63')
+    i = 0
+    print("change!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+    while i<80:
+        print(driver.title)
+        time.sleep(1)
+        action.move_by_offset(200, 500)
+        time.sleep(1)
+        action.move_by_offset(200, 490)
+        time.sleep(1)
+        action.move_by_offset(200, 495)
+        time.sleep(1)
+        i+=1
+    # ActionChains(driver).move_by_offset(200, 520).click().perform()
+
+
+    # ActionChains(driver).move_by_offset(200, 550).click().perform()
+
+
