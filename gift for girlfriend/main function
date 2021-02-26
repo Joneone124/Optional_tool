@@ -52,7 +52,7 @@ def distance2(c1, c2):
     r, g, b = c1
     tr, tg, tb = c2
     return 3 * (r - tr) ** 2 + 4 * (g - tg) ** 2 + 2 * (b - tb) ** 2
-
+ 
 
 # find the right emoji to replace the pixel(s)
 def find_emoji(color):
